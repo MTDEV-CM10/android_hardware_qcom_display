@@ -16,6 +16,7 @@
  */
 
 #include <overlay.h>
+#include <cutils/properties.h>
 #include "hwc_utils.h"
 #include "mdp_version.h"
 #include "hwc_video.h"
@@ -24,6 +25,7 @@
 #include "hwc_external.h"
 #include "hwc_mdpcomp.h"
 #include "hwc_extonly.h"
+#include "hwc_service.h"
 
 namespace qhwc {
 
@@ -40,6 +42,8 @@ void initContext(hwc_context_t *ctx)
 {
     openFramebufferDevice(ctx);
     ctx->mOverlay = overlay::Overlay::getInstance();
+    ctx->mHwcService = hwcService::HWComposerService::getInstance();
+    ctx->mHwcService->setHwcContext(ctx);
     ctx->qbuf = new QueuedBufferStore();
     ctx->mMDP.version = qdutils::MDPVersion::getInstance().getMDPVersion();
     ctx->mMDP.hasOverlay = qdutils::MDPVersion::getInstance().hasOverlay();
@@ -49,6 +53,10 @@ void initContext(hwc_context_t *ctx)
     MDPComp::init(ctx);
 
     init_uevent_thread(ctx);
+
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.egl.swapinterval", value, "1");
+    ctx->swapInterval = atoi(value);
 
     ALOGI("Initializing Qualcomm Hardware Composer");
     ALOGI("MDP version: %d", ctx->mMDP.version);

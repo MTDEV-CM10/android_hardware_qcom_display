@@ -228,6 +228,28 @@ struct Whf {
     uint32_t size;
 };
 
+class ActionSafe {
+private:
+    ActionSafe() : mWidth(0.0f), mHeight(0.0f) { };
+    float mWidth;
+    float mHeight;
+    static ActionSafe *sActionSafe;
+public:
+    ~ActionSafe() { };
+    static ActionSafe* getInstance() {
+        if(!sActionSafe) {
+            sActionSafe = new ActionSafe();
+        }
+        return sActionSafe;
+    }
+    void setDimension(int w, int h) {
+        mWidth = (float)w;
+        mHeight = (float)h;
+    }
+    float getWidth() { return mWidth; }
+    float getHeight() { return mHeight; }
+};
+
 enum { MAX_PATH_LEN = 256 };
 
 /**
@@ -640,10 +662,12 @@ inline int getMdpOrient(eTransform rotation) {
         case OVERLAY_TRANSFORM_FLIP_V:  return MDP_FLIP_UD;
         case OVERLAY_TRANSFORM_FLIP_H:  return MDP_FLIP_LR;
         case OVERLAY_TRANSFORM_ROT_90:  return MDP_ROT_90;
+        //getMdpOrient will switch the flips if the source is 90 rotated.
+        //Clients in Android dont factor in 90 rotation while deciding flip.
         case OVERLAY_TRANSFORM_ROT_90_FLIP_V:
-                return MDP_ROT_90 | MDP_FLIP_UD;
-        case OVERLAY_TRANSFORM_ROT_90_FLIP_H:
                 return MDP_ROT_90 | MDP_FLIP_LR;
+        case OVERLAY_TRANSFORM_ROT_90_FLIP_H:
+                return MDP_ROT_90 | MDP_FLIP_UD;
         case OVERLAY_TRANSFORM_ROT_180: return MDP_ROT_180;
         case OVERLAY_TRANSFORM_ROT_270: return MDP_ROT_270;
         default:
