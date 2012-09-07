@@ -28,6 +28,7 @@
 #include "hwc_utils.h"
 #include "hwc_qbuf.h"
 #include "hwc_video.h"
+#include "hwc_pip.h"
 #include "hwc_uimirror.h"
 #include "hwc_copybit.h"
 #include "hwc_external.h"
@@ -83,12 +84,10 @@ static int hwc_prepare(hwc_composer_device_t *dev, hwc_layer_list_t* list)
     if(ctx->mExtDisplay->getExternalDisplay())
         ovutils::setExtType(ctx->mExtDisplay->getExternalDisplay());
 
-    //Prepare is called after a vsync, so unlock previous buffers here.
-    ctx->qbuf->unlockAllPrevious();
-
     if (LIKELY(list)) {
         //reset for this draw round
         VideoOverlay::reset();
+        VideoPIP::reset();
         ExtOnly::reset();
 
         getLayerStats(ctx, list);
@@ -97,6 +96,8 @@ static int hwc_prepare(hwc_composer_device_t *dev, hwc_layer_list_t* list)
         if(VideoOverlay::prepare(ctx, list)) {
             ctx->overlayInUse = true;
             //Nothing here
+        } else if(VideoPIP::prepare(ctx, list)) {
+            ctx->overlayInUse = true;
         } else if(ExtOnly::prepare(ctx, list)) {
             ctx->overlayInUse = true;
         } else if(UIMirrorOverlay::prepare(ctx, list)) {
@@ -172,23 +173,32 @@ static int hwc_set(hwc_composer_device_t *dev,
 {
     int ret = 0;
     hwc_context_t* ctx = (hwc_context_t*)(dev);
-    if (LIKELY(list)) {
-        VideoOverlay::draw(ctx, list);
-        ExtOnly::draw(ctx, list);
-        CopyBit::draw(ctx, list, (EGLDisplay)dpy, (EGLSurface)sur);
-        MDPComp::draw(ctx, list);
-        EGLBoolean sucess = eglSwapBuffers((EGLDisplay)dpy, (EGLSurface)sur);
+    if (dpy && sur) {
+        if (LIKELY(list)) {
+            VideoOverlay::draw(ctx, list);
+            VideoPIP::draw(ctx,list);
+            ExtOnly::draw(ctx, list);
+            CopyBit::draw(ctx, list, (EGLDisplay)dpy, (EGLSurface)sur);
+            MDPComp::draw(ctx, list);
+        }
+        eglSwapBuffers((EGLDisplay)dpy, (EGLSurface)sur);
+        wait4fbPost(ctx);
+        //Can draw to HDMI only when fb_post is reached
         UIMirrorOverlay::draw(ctx);
+        //HDMI commit and primary commit (PAN) happening in parallel
         if(ctx->mExtDisplay->getExternalDisplay())
-           ctx->mExtDisplay->commit();
+            ctx->mExtDisplay->commit();
+        //Virtual barrier for threads to finish
+        wait4Pan(ctx);
     } else {
         ctx->mOverlay->setState(ovutils::OV_CLOSED);
-        ctx->qbuf->unlockAllPrevious();
+        ctx->qbuf->unlockAll();
     }
 
     if(!ctx->overlayInUse)
         ctx->mOverlay->setState(ovutils::OV_CLOSED);
 
+    ctx->qbuf->unlockAllPrevious();
     return ret;
 }
 
@@ -224,10 +234,10 @@ static int hwc_device_open(const struct hw_module_t* module, const char* name,
         methods->eventControl = hwc_eventControl;
 
         dev->device.common.tag     = HARDWARE_DEVICE_TAG;
-        //XXX: This disables hardware vsync on 7x27A, 8x25 and 8x55
-        // Fix when HW vsync is available on those targets
 #ifndef NO_HW_VSYNC
-        if(dev->mMDP.version < 410) {
+        //XXX: This disables hardware vsync on 8x55
+        // Fix when HW vsync is available on 8x55
+        if(dev->mMDP.version == 400) {
 #endif
             dev->device.common.version = 0;
             ALOGI("%s: Hardware VSYNC not supported", __FUNCTION__);

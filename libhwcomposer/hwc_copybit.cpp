@@ -82,8 +82,7 @@ bool CopyBit::canUseCopybitForRGB(hwc_context_t *ctx, hwc_layer_list_t *list) {
     int compositionType =
         qdutils::QCCompositionType::getInstance().getCompositionType();
 
-    if ((compositionType & qdutils::COMPOSITION_TYPE_C2D) ||
-        (compositionType & qdutils::COMPOSITION_TYPE_DYN)) {
+    if (compositionType & qdutils::COMPOSITION_TYPE_C2D){
          if (sYuvCount) {
              //Overlay up & running. Dont use COPYBIT for RGB layers.
              // TODO need to implement blending with C2D
@@ -93,9 +92,7 @@ bool CopyBit::canUseCopybitForRGB(hwc_context_t *ctx, hwc_layer_list_t *list) {
 
     if (compositionType & qdutils::COMPOSITION_TYPE_DYN) {
         // DYN Composition:
-        // use copybit, if (TotalRGBRenderArea < 2 * FB Area)
-        // this is done based on perf inputs in ICS
-        // TODO: Above condition needs to be re-evaluated in JB
+        // use copybit, depending on dyn threshold
 
         framebuffer_device_t *fbDev = ctx->mFbDev;
         if (!fbDev) {
@@ -106,7 +103,7 @@ bool CopyBit::canUseCopybitForRGB(hwc_context_t *ctx, hwc_layer_list_t *list) {
         unsigned int renderArea = getRGBRenderingArea(list);
             ALOGD_IF (DEBUG_COPYBIT, "%s:renderArea %u, fbArea %u",
                                   __FUNCTION__, renderArea, fbArea);
-        if (renderArea < (2 * fbArea)) {
+        if (renderArea < (unsigned int) (ctx->dynThreshold * fbArea)) {
             return true;
         }
     } else if ((compositionType & qdutils::COMPOSITION_TYPE_MDP)) {

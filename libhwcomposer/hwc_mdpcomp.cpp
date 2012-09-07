@@ -296,6 +296,10 @@ int MDPComp::prepare(hwc_context_t *ctx, hwc_layer_t *layer,
                                                    : ovutils::OV_MDP_FLAGS_NONE;
         ovutils::eIsFg isFG = mdp_info.isFG ? ovutils::IS_FG_SET
                                                            : ovutils::IS_FG_OFF;
+        ovutils::setMdpFlags(mdpFlags, ovutils::OV_MDP_BACKEND_COMPOSITION);
+        if (layer->blending == HWC_BLENDING_PREMULT) {
+            ovutils::setMdpFlags(mdpFlags, ovutils::OV_MDP_BLEND_FG_PREMULT);
+        }
         ovutils::PipeArgs parg(mdpFlags,
                                info,
                                zOrder,
@@ -360,6 +364,7 @@ bool MDPComp::is_doable(hwc_composer_device_t *dev, hwc_layer_list_t* list) {
     //Disable MDPComp when ext display connected
     if(ctx->mExtDisplay->getExternalDisplay()) {
         ALOGD_IF(isDebug(), "%s: External display connected.", __FUNCTION__);
+        return false;
     }
 
     //FB composition on idle timeout
