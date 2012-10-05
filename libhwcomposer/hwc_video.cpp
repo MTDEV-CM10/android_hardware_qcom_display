@@ -23,8 +23,6 @@
 
 namespace qhwc {
 
-#define FINAL_TRANSFORM_MASK 0x000F
-
 //Static Members
 ovutils::eOverlayState VideoOverlay::sState = ovutils::OV_CLOSED;
 int VideoOverlay::sYuvCount = 0;
@@ -115,6 +113,10 @@ bool configPrimVid(hwc_context_t *ctx, hwc_layer_t *layer) {
         ovutils::setMdpFlags(mdpFlags,
                 ovutils::OV_MDP_SECURE_OVERLAY_SESSION);
     }
+    if(layer->blending == HWC_BLENDING_PREMULT) {
+        ovutils::setMdpFlags(mdpFlags,
+                ovutils::OV_MDP_BLEND_FG_PREMULT);
+    }
 
     ovutils::eIsFg isFgFlag = ovutils::IS_FG_OFF;
     if (ctx->numHwLayers == 1) {
@@ -130,17 +132,7 @@ bool configPrimVid(hwc_context_t *ctx, hwc_layer_t *layer) {
     ov.setSource(pargs, ovutils::OV_PIPE0);
 
     hwc_rect_t sourceCrop = layer->sourceCrop;
-    // x,y,w,h
-    ovutils::Dim dcrop(sourceCrop.left, sourceCrop.top,
-            sourceCrop.right - sourceCrop.left,
-            sourceCrop.bottom - sourceCrop.top);
-
-    ovutils::Dim dpos;
     hwc_rect_t displayFrame = layer->displayFrame;
-    dpos.x = displayFrame.left;
-    dpos.y = displayFrame.top;
-    dpos.w = (displayFrame.right - displayFrame.left);
-    dpos.h = (displayFrame.bottom - displayFrame.top);
 
     //Calculate the rect for primary based on whether the supplied position
     //is within or outside bounds.
@@ -153,27 +145,25 @@ bool configPrimVid(hwc_context_t *ctx, hwc_layer_t *layer) {
             displayFrame.top < 0 ||
             displayFrame.right > fbWidth ||
             displayFrame.bottom > fbHeight) {
-
         calculate_crop_rects(sourceCrop, displayFrame, fbWidth, fbHeight);
-
-        //Update calculated width and height
-        dcrop.w = sourceCrop.right - sourceCrop.left;
-        dcrop.h = sourceCrop.bottom - sourceCrop.top;
-
-        dpos.x = displayFrame.left;
-        dpos.y = displayFrame.top;
-        dpos.w = displayFrame.right - displayFrame.left;
-        dpos.h = displayFrame.bottom - displayFrame.top;
     }
 
+    // source crop x,y,w,h
+    ovutils::Dim dcrop(sourceCrop.left, sourceCrop.top,
+            sourceCrop.right - sourceCrop.left,
+            sourceCrop.bottom - sourceCrop.top);
     //Only for Primary
     ov.setCrop(dcrop, ovutils::OV_PIPE0);
 
-    int transform = layer->transform & FINAL_TRANSFORM_MASK;
     ovutils::eTransform orient =
-            static_cast<ovutils::eTransform>(transform);
+            static_cast<ovutils::eTransform>(layer->transform);
     ov.setTransform(orient, ovutils::OV_PIPE0);
 
+    // position x,y,w,h
+    ovutils::Dim dpos(displayFrame.left,
+            displayFrame.top,
+            displayFrame.right - displayFrame.left,
+            displayFrame.bottom - displayFrame.top);
     ov.setPosition(dpos, ovutils::OV_PIPE0);
 
     if (!ov.commit(ovutils::OV_PIPE0)) {
@@ -215,9 +205,8 @@ bool configExtVid(hwc_context_t *ctx, hwc_layer_t *layer) {
     //Only for External
     ov.setCrop(dcrop, ovutils::OV_PIPE1);
 
-    // FIXME: Use source orientation for TV when source is portrait
-    //Only for External
-    ov.setTransform(0, ovutils::OV_PIPE1);
+    //use sourceTransform only for External
+    ov.setTransform(layer->sourceTransform, ovutils::OV_PIPE1);
 
     ovutils::Dim dpos;
     hwc_rect_t displayFrame = layer->displayFrame;

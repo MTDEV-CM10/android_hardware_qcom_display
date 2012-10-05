@@ -24,7 +24,6 @@
 #define ALIGN_TO(x, align)     (((x) + ((align)-1)) & ~((align)-1))
 #define LIKELY( exp )       (__builtin_expect( (exp) != 0, true  ))
 #define UNLIKELY( exp )     (__builtin_expect( (exp) != 0, false ))
-#define FINAL_TRANSFORM_MASK 0x000F
 
 //Fwrd decls
 struct hwc_context_t;
@@ -95,6 +94,10 @@ static inline bool isYuvBuffer(const private_handle_t* hnd) {
     return (hnd && (hnd->bufferType == BUFFER_TYPE_VIDEO));
 }
 
+// Returns true if the buffer is secure
+static inline bool isSecureBuffer(const private_handle_t* hnd) {
+    return (hnd && (private_handle_t::PRIV_FLAGS_SECURE_BUFFER & hnd->flags));
+}
 //Return true if buffer is marked locked
 static inline bool isBufferLocked(const private_handle_t* hnd) {
     return (hnd && (private_handle_t::PRIV_FLAGS_HWC_LOCK & hnd->flags));
